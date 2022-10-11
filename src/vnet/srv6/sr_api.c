@@ -37,10 +37,14 @@
 static void vl_api_sr_localsid_add_del_t_handler
   (vl_api_sr_localsid_add_del_t * mp)
 {
+  ip6_sr_main_t *sm = &sr_main;
   vl_api_sr_localsid_add_del_reply_t *rmp;
   int rv = 0;
   ip46_address_t prefix;
   ip6_address_t localsid;
+  void *ls_plugin_mem = 0;
+  u16 behavior = 0;
+
 /*
  * int sr_cli_localsid (char is_del, ip6_address_t *localsid_addr,
  *  char end_psp, u8 behavior, u32 sw_if_index, u32 vlan_index, u32 fib_table,
@@ -51,13 +55,40 @@ static void vl_api_sr_localsid_add_del_t_handler
       mp->behavior == SR_BEHAVIOR_DX4 || mp->behavior == SR_BEHAVIOR_DX2)
     VALIDATE_SW_IF_INDEX (mp);
 
+  if (!mp->plugin_behavior)
+	{
+	  sr_policy_fn_registration_t *plugin = 0, **vec_plugins = 0;
+	  sr_policy_fn_registration_t **plugin_it = 0;
+
+	  /* *INDENT-OFF* */
+	  pool_foreach (plugin, sm->policy_plugin_functions)
+	    {
+	      vec_add1 (vec_plugins, plugin);
+	    }
+	  /* *INDENT-ON* */
+
+	  vec_foreach (plugin_it, vec_plugins)
+	  {
+	    if (unformat(mp->plugin_behavior, "%U", (*plugin_it)->ls_unformat, &ls_plugin_mem))
+	      {
+		      behavior = (*plugin_it)->sr_policy_function_number;
+		      break;
+	      }
+	  }
+	}
+  else
+  {
+    behavior = mp->behavior;
+  }
+  
+
   ip6_address_decode (mp->localsid, &localsid);
   ip_address_decode (&mp->nh_addr, &prefix);
 
   rv = sr_cli_localsid (mp->is_del,
 			&localsid, 128,
 			mp->end_psp,
-			mp->behavior,
+			behavior,
 			ntohl (mp->sw_if_index),
 			ntohl (mp->vlan_index),
 			ntohl (mp->fib_table), &prefix, 0, NULL);

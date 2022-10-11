@@ -43,6 +43,7 @@ typedef srv6_sid_list_with_sl_index
     @param localsid_addr IPv6 address of the localsid
     @param end_psp Boolean of whether decapsulation is allowed in this function
     @param behavior Type of behavior (function) for this localsid
+    @param plugin_behavior Variables for when defined in plugin. behavior can be overridden
     @param sw_if_index Only for L2/L3 xconnect. OIF. In VRF variant the
      fib_table. Default:0xffffffff
     @param vlan_index Only for L2 xconnect. Outgoing VLAN tag.
@@ -57,6 +58,7 @@ autoreply define sr_localsid_add_del
   vl_api_ip6_address_t localsid;
   bool end_psp;
   vl_api_sr_behavior_t behavior;
+  string plugin_behavior;
   vl_api_interface_index_t sw_if_index [default=0xffffffff];
   u32 vlan_index;
   u32 fib_table;
@@ -70,6 +72,7 @@ autoreply define sr_localsid_add_del
     @param weight is the weight of the sid list. optional.
     @param is_encap is the behavior of the SR policy. (0.SRH insert // 1.Encapsulation)
     @param is_spray is the type of the SR policy. (0.Default // 1.Spray)
+    @param behavior is the behavior of the SR policy. 
     @param fib_table is the VRF where to install the FIB entry for the BSID
     @param sids is a srv6_sid_list object
 */
@@ -81,6 +84,7 @@ autoreply define sr_policy_add
   u32 weight;
   bool is_encap;
   bool is_spray;
+  u16 behavior;
   u32 fib_table;
   vl_api_srv6_sid_list_t sids;
 };
