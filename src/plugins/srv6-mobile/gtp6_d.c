@@ -21,6 +21,9 @@
 #include <vpp/app/version.h>
 #include <srv6-mobile/mobile.h>
 
+extern ip6_address_t sr_pr_encaps_src;
+extern u8 sr_pr_encaps_hop_limit;
+
 srv6_end_main_v6_decap_t srv6_end_main_v6_decap;
 
 static void
@@ -62,7 +65,7 @@ static u8 keyword_str[] = "end.m.gtp6.d";
 static u8 def_str[] =
   "Endpoint function with dencapsulation for IPv6/GTP tunnel";
 static u8 param_str[] =
-  "<sr-prefix>/<sr-prefixlen> [nhtype <nhtype>] fib-table <id>";
+  "<sr-prefix>/<sr-prefixlen> [nhtype <nhtype>] fib-table <id> teid <teid>/<teid length>  sid <sid>";
 
 static u8 *
 clb_format_srv6_end_m_gtp6_d (u8 * s, va_list * args)
@@ -87,6 +90,8 @@ clb_format_srv6_end_m_gtp6_d (u8 * s, va_list * args)
 	s = format (s, ", NHType Unknow(%d)", ls_mem->nhtype);
     }
 
+  s = format (s, " SID: %U", format_ip6_address, &ls_mem->sid);
+
   s = format (s, " FIB table %d", ls_mem->fib_table);
 
   s = format (s, " Drop In %d", ls_mem->drop_in);
@@ -94,73 +99,177 @@ clb_format_srv6_end_m_gtp6_d (u8 * s, va_list * args)
   return s;
 }
 
-void
+u32
 alloc_param_srv6_end_m_gtp6_d (void **plugin_mem_p, const void *sr_prefix,
-			       const u32 sr_prefixlen, const u8 nhtype,
-			       const bool drop_in, const u32 fib_table)
+			        const u32 sr_prefixlen, const u8 nhtype,
+			        const bool drop_in, const u32 fib_table,
+              const bool is_sid, const void *lsid,
+              const bool is_teid, u32 teid, const u32 teid_len)
 {
-  srv6_end_gtp6_d_param_t *ls_mem;
-  ls_mem = clib_mem_alloc (sizeof *ls_mem);
-  clib_memset (ls_mem, 0, sizeof *ls_mem);
-  *plugin_mem_p = ls_mem;
+  srv6_end_gtp6_d_param_t *ls_mem, *p_mem;
+  ip6_header_t *iph;
+  ip6_address_t sid;
+  struct sr_table_node *node;
+  memcpy (&sid, lsid, sizeof (ip6_address_t));
 
-  ls_mem->sr_prefixlen = sr_prefixlen;
-  memcpy (&ls_mem->sr_prefix, sr_prefix, sizeof (ip6_address_t));
-  ls_mem->nhtype = nhtype;
-  ls_mem->drop_in = drop_in;
-  ls_mem->fib_table = fib_table;
-  ls_mem->fib4_index = ip4_fib_index_from_table_id (fib_table);
-  ls_mem->fib6_index = ip6_fib_index_from_table_id (fib_table);
+  ls_mem = *plugin_mem_p;
+
+  if (ls_mem == NULL)
+    {
+      ls_mem = clib_mem_alloc_aligned_at_offset (sizeof *ls_mem, 0, 0, 1);
+      clib_memset (ls_mem, 0, sizeof *ls_mem);
+      *plugin_mem_p = ls_mem;
+    }
+  if (is_teid)
+    {
+      if (ls_mem->tedb == NULL)
+        {
+          ls_mem->tedb = sr_table_new (AF_INET, 32, NULL);
+          if (ls_mem->tedb == NULL)
+            {
+              return 0;
+            }
+        }
+
+      teid = clib_host_to_net_u32(teid);
+      node = sr_table_node_get (ls_mem->tedb, (u8 *)&teid, teid_len);
+      if (node == NULL)
+        {
+          return 0;
+        }
+
+      p_mem = sr_table_node_get_data (node);
+      if (p_mem == NULL)
+        {
+          p_mem = clib_mem_alloc_aligned_at_offset (sizeof *p_mem, 0, 0, 1);
+          clib_memset (p_mem, 0, sizeof *p_mem);
+          sr_table_node_set_data (node, p_mem);
+        }
+
+      memcpy (&ls_mem->sr_prefix, sr_prefix, sizeof (ip6_address_t));
+      p_mem->sr_prefixlen = sr_prefixlen;
+
+      p_mem->nhtype = nhtype;
+
+      p_mem->drop_in = drop_in;
+
+      p_mem->sid = sid;
+      p_mem->sid_present = is_sid;
+      if (is_sid)
+        {
+          iph = &p_mem->ip;
+          iph->ip_version_traffic_class_and_flow_label =
+          clib_host_to_net_u32(0 | ((6 & 0xF) << 28));
+          iph->src_address.as_u64[0] = sr_pr_encaps_src.as_u64[0];
+          iph->src_address.as_u64[1] = sr_pr_encaps_src.as_u64[1];
+          iph->dst_address.as_u64[0] = sid.as_u64[0];
+          iph->dst_address.as_u64[1] = sid.as_u64[1];
+          iph->hop_limit = sr_pr_encaps_hop_limit;
+        }
+
+      p_mem->fib_table = fib_table;
+      p_mem->fib4_index = ip4_fib_index_from_table_id (fib_table);
+      p_mem->fib6_index = ip6_fib_index_from_table_id (fib_table);
+    }
+  else
+    {
+      memcpy (&ls_mem->sr_prefix, sr_prefix, sizeof (ip6_address_t));
+      ls_mem->sr_prefixlen = sr_prefixlen;
+
+      ls_mem->nhtype = nhtype;
+
+      ls_mem->drop_in = drop_in;
+
+      ls_mem->sid = sid;
+      ls_mem->sid_present = is_sid;
+      if (is_sid)
+        {
+          iph = &ls_mem->ip;
+          iph->ip_version_traffic_class_and_flow_label =
+          clib_host_to_net_u32(0 | ((6 & 0xF) << 28));
+          iph->src_address.as_u64[0] = sr_pr_encaps_src.as_u64[0];
+          iph->src_address.as_u64[1] = sr_pr_encaps_src.as_u64[1];
+          iph->dst_address.as_u64[0] = sid.as_u64[0];
+          iph->dst_address.as_u64[1] = sid.as_u64[1];
+          iph->hop_limit = sr_pr_encaps_hop_limit;
+        }
+
+      ls_mem->fib_table = fib_table;
+      ls_mem->fib4_index = ip4_fib_index_from_table_id (fib_table);
+      ls_mem->fib6_index = ip6_fib_index_from_table_id (fib_table);
+    }
+  return 1;
 }
 
 static uword
 clb_unformat_srv6_end_m_gtp6_d (unformat_input_t * input, va_list * args)
 {
   void **plugin_mem_p = va_arg (*args, void **);
+  srv6_end_gtp6_d_param_t *ls_mem, *p_mem;
   ip6_address_t sr_prefix;
+  ip6_address_t sid;
+  ip6_header_t *iph;
   u32 sr_prefixlen;
+  u32 teid = 0;
+  u32 teid_len = 0;
   u8 nhtype = SRV6_NHTYPE_NONE;
   bool drop_in = false;
+  bool is_sid = false;
+  bool is_teid = false;
   bool config = false;
   u32 fib_table = 0;
+  struct sr_table_node *node;
 
   while (unformat_check_input (input) != UNFORMAT_END_OF_INPUT)
     {
       if (unformat (input, "end.m.gtp6.d %U/%d nh-type ipv4 fib-table %d",
-		    unformat_ip6_address, &sr_prefix, &sr_prefixlen,
-		    &fib_table))
-	{
-	  config = true;
-	  nhtype = SRV6_NHTYPE_IPV4;
-	}
+		unformat_ip6_address, &sr_prefix, &sr_prefixlen, &fib_table))
+        {
+          config = true;
+          nhtype = SRV6_NHTYPE_IPV4;
+        }
       else if (unformat (input, "end.m.gtp6.d %U/%d nh-type ipv6 fib-table %d",
-			 unformat_ip6_address, &sr_prefix, &sr_prefixlen,
-			 &fib_table))
-	{
-	  config = true;
-	  nhtype = SRV6_NHTYPE_IPV6;
-	}
+		     unformat_ip6_address, &sr_prefix, &sr_prefixlen,
+		     &fib_table))
+        {
+          config = true;
+          nhtype = SRV6_NHTYPE_IPV6;
+        }
       else if (unformat (input, "end.m.gtp6.d %U/%d nh-type none",
-			 unformat_ip6_address, &sr_prefix, &sr_prefixlen))
-	{
-	  config = true;
-	  nhtype = SRV6_NHTYPE_NON_IP;
-	}
+		     unformat_ip6_address, &sr_prefix, &sr_prefixlen))
+        {
+          config = true;
+          nhtype = SRV6_NHTYPE_NON_IP;
+        }
       else if (unformat (input, "end.m.gtp6.d %U/%d fib-table %d",
-			 unformat_ip6_address, &sr_prefix, &sr_prefixlen,
-			 &fib_table))
-	{
-	  config = true;
-	  nhtype = SRV6_NHTYPE_NONE;
-	}
+		     unformat_ip6_address, &sr_prefix, &sr_prefixlen,
+		     &fib_table))
+        {
+          config = true;
+          nhtype = SRV6_NHTYPE_NONE;
+        }
+      else if (unformat (input, "end.m.gtp6.d %U/%d",
+		     unformat_ip6_address, &sr_prefix, &sr_prefixlen))
+        {
+          config = true;
+          nhtype = SRV6_NHTYPE_NONE;
+        }
+      else if (unformat (input, "teid %d/%d", &teid, &teid_len))
+        {
+          is_teid = true;
+        }
+      else if (unformat (input, "sid %U", unformat_ip6_address, &sid))
+        {
+          is_sid = true;
+        }
       else if (unformat (input, "drop-in"))
-	{
-	  drop_in = true;
-	}
+        {
+          drop_in = true;
+        }
       else
-	{
-	  return 0;
-	}
+        {
+          return 0;
+        }
     }
 
   if (!config)
@@ -168,10 +277,8 @@ clb_unformat_srv6_end_m_gtp6_d (unformat_input_t * input, va_list * args)
       return 0;
     }
 
-  alloc_param_srv6_end_m_gtp6_d (plugin_mem_p, &sr_prefix, sr_prefixlen,
-				 nhtype, drop_in, fib_table);
-
-  return 1;
+  return  alloc_param_srv6_end_m_gtp6_d (plugin_mem_p, &sr_prefix, sr_prefixlen,
+				 nhtype, drop_in, fib_table, is_sid, &sid, is_teid, teid, teid_len);
 }
 
 static int

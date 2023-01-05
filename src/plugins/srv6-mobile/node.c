@@ -696,24 +696,18 @@ VLIB_NODE_FN (srv6_end_m_gtp4_e)
 
 // Function for SRv6 GTP4.D function.
 static inline u32
-srv6_gtp4_decap_processing (vlib_main_t *vm, vlib_node_runtime_t *node,
-			    vlib_buffer_t *b0)
+srv6_gtp4_decap_processing (vlib_main_t * vm,
+                vlib_node_runtime_t * node, vlib_buffer_t * b0,
+                srv6_end_gtp4_d_param_t *ls_param)
 {
   srv6_t_main_v4_decap_t *sm = &srv6_t_main_v4_decap;
   ip6_sr_main_t *sm2 = &sr_main;
 
-  ip6_sr_sl_t *sl0;
-  srv6_end_gtp4_d_param_t *ls_param;
   ip4_header_t *ip4;
 
   uword len0;
 
   u32 next0 = SRV6_T_M_GTP4_D_NEXT_LOOKUP6;
-
-  sl0 = pool_elt_at_index (sm2->sid_lists,
-			   vnet_buffer (b0)->ip.adj_index[VLIB_TX]);
-
-  ls_param = (srv6_end_gtp4_d_param_t *) sl0->plugin_mem;
 
   len0 = vlib_buffer_length_in_chain (vm, b0);
 
@@ -1160,6 +1154,8 @@ VLIB_NODE_FN (srv6_t_m_gtp4_d)
   ip6_sr_main_t *sm2 = &sr_main;
   u32 n_left_from, next_index, *from, *to_next;
 
+  ip6_header_t *iph;
+
   ip6_sr_sl_t *sl0;
   srv6_end_gtp4_d_param_t *ls_param;
 
@@ -1176,112 +1172,154 @@ VLIB_NODE_FN (srv6_t_m_gtp4_d)
       vlib_get_next_frame (vm, node, next_index, to_next, n_left_to_next);
 
       while (n_left_from > 0 && n_left_to_next > 0)
-	{
-	  u32 bi0;
-	  vlib_buffer_t *b0;
+        {
+          u32 bi0;
+          u32 teid;
+          vlib_buffer_t *b0;
+    
+          u32 next0;
+    
+          ip4_gtpu_header_t *hdr;
+          u32 hdrlen;
+          u8 gtpu_type;
+          bool gtp4;
+          bool ipv4;
+    
+          // defaults
+          bi0 = from[0];
+          to_next[0] = bi0;
+          from += 1;
+          to_next += 1;
+          n_left_from -= 1;
+          n_left_to_next -= 1;
+    
+          b0 = vlib_get_buffer (vm, bi0);
+    
+          sl0 =
+            pool_elt_at_index (sm2->sid_lists,
+                       vnet_buffer (b0)->ip.adj_index[VLIB_TX]);
+    
+          ls_param = (srv6_end_gtp4_d_param_t *) sl0->plugin_mem;
+    
+          hdr = vlib_buffer_get_current (b0);
+          gtpu_type = hdr->gtpu.type;
 
-	  u32 next0;
+          if (ls_param->tedb != NULL)
+            {
+              struct sr_table_node *node;
 
-	  ip4_gtpu_header_t *hdr;
-	  u32 hdrlen;
-	  u8 gtpu_type;
-	  bool gtp4;
-	  bool ipv4;
+              //teid = clib_net_to_host_u32(hdr->gtpu.teid);
+              teid = hdr->gtpu.teid;
+              node = sr_table_node_match (ls_param->tedb, (u8 *)&teid, 32);
+              if (node != NULL) {
+                ls_param = (srv6_end_gtp4_d_param_t *)sr_table_node_get_data (node);
+              }
+            }
 
-	  // defaults
-	  bi0 = from[0];
-	  to_next[0] = bi0;
-	  from += 1;
-	  to_next += 1;
-	  n_left_from -= 1;
-	  n_left_to_next -= 1;
+          if (PREDICT_FALSE ((ls_param == NULL) || (ls_param->sr_prefixlen == 0)))
+            {
+              next0 = SRV6_T_M_GTP4_D_NEXT_DROP;
+              goto DONE;
+            }
+    
+          gtp4 = false;
+          ipv4 = true;
+    
+          if (PREDICT_FALSE (gtpu_type != GTPU_TYPE_GTPU || ls_param->drop_in))
+            {
+              gtp4 = true;
+            }
+          else
+            {
+              ip6_header_t *ip6;
+    
+              hdrlen = sizeof (ip4_gtpu_header_t);
+    
+              if (hdr->gtpu.ver_flags & (GTPU_EXTHDR_FLAG | GTPU_SEQ_FLAG))
+                {
+                  hdrlen += sizeof (gtpu_exthdr_t);
+                  if (hdr->gtpu.ext->nextexthdr == GTPU_EXTHDR_PDU_SESSION)
+                    {
+                      gtpu_pdu_session_t *sess;
+                      sess = (gtpu_pdu_session_t *) (((char *) hdr) + hdrlen);
+                      hdrlen += sizeof (gtpu_pdu_session_t);
+    
+                      if (sess->u.val & GTPU_PDU_SESSION_P_BIT_MASK)
+                        {
+                          hdrlen += sizeof (gtpu_paging_policy_t);
+                        }
+                    }
+                }
+    
+              ip6 = (ip6_header_t *) (((char *) hdr) + hdrlen);
+              if ((clib_net_to_host_u32
+               (ip6->ip_version_traffic_class_and_flow_label) >> 28) == 6)
+                {
+                  ipv4 = false;
+                  if (((ip6->dst_address.as_u8[0] == 0xff)
+                    && (ip6->dst_address.as_u8[1] == 0x02)) ||
+                      ((ip6->dst_address.as_u8[0] == 0xfe)
+                    && ((ip6->dst_address.as_u8[1] & 0xc0) == 0x80)))
+                    {
+                      // Inner desitnation is IPv6 link local
+                      gtp4 = true;
+                    }
+                }
+            }
+    
+          if (gtp4)
+            {
+              next0 = srv6_gtp4_decap_processing (vm, node, b0, ls_param);
+              if (PREDICT_TRUE (next0 == SRV6_T_M_GTP4_D_NEXT_LOOKUP6))
+                good_n++;
+              else
+                bad_n++;
+            }
+          else
+            {
+              /* Strip off the outer header (IPv4 + GTP + UDP + IEs) */
+              vlib_buffer_advance (b0, (word) hdrlen);
+    
+              if (ls_param->sid_present)
+                {
+                  vlib_buffer_advance (b0, -(word) sizeof (ip6_header_t));
+                  iph = vlib_buffer_get_current (b0);
 
-	  b0 = vlib_get_buffer (vm, bi0);
+                  clib_memcpy_fast (iph, &ls_param->ip, sizeof (ip6_header_t));
 
-	  sl0 = pool_elt_at_index (sm2->sid_lists,
-				   vnet_buffer (b0)->ip.adj_index[VLIB_TX]);
+                  if (ipv4)
+                    {
+                      iph->protocol = IP_PROTOCOL_IP_IN_IP;
+                    }
+                  else
+                    {
+                      iph->protocol = IP_PROTOCOL_IPV6;
+                    }
 
-	  ls_param = (srv6_end_gtp4_d_param_t *) sl0->plugin_mem;
+                  iph->payload_length = clib_host_to_net_u16 (b0->current_length - sizeof (ip6_header_t));
 
-	  hdr = vlib_buffer_get_current (b0);
-	  gtpu_type = hdr->gtpu.type;
-
-	  gtp4 = false;
-	  ipv4 = true;
-
-	  if (PREDICT_FALSE (gtpu_type != GTPU_TYPE_GTPU || ls_param->drop_in))
-	    {
-	      gtp4 = true;
-	    }
-	  else
-	    {
-	      ip6_header_t *ip6;
-
-	      hdrlen = sizeof (ip4_gtpu_header_t);
-
-	      if (hdr->gtpu.ver_flags & (GTPU_EXTHDR_FLAG | GTPU_SEQ_FLAG))
-		{
-		  hdrlen += sizeof (gtpu_exthdr_t);
-		  if (hdr->gtpu.ext->nextexthdr == GTPU_EXTHDR_PDU_SESSION)
-		    {
-		      gtpu_pdu_session_t *sess;
-		      sess = (gtpu_pdu_session_t *) (((char *) hdr) + hdrlen);
-		      hdrlen += sizeof (gtpu_pdu_session_t);
-
-		      if (sess->u.val & GTPU_PDU_SESSION_P_BIT_MASK)
-			{
-			  hdrlen += sizeof (gtpu_paging_policy_t);
-			}
-		    }
-		}
-
-	      ip6 = (ip6_header_t *) (((char *) hdr) + hdrlen);
-	      if ((clib_net_to_host_u32 (
-		     ip6->ip_version_traffic_class_and_flow_label) >>
-		   28) == 6)
-		{
-		  ipv4 = false;
-		  if (((ip6->dst_address.as_u8[0] == 0xff) &&
-		       (ip6->dst_address.as_u8[1] == 0x02)) ||
-		      ((ip6->dst_address.as_u8[0] == 0xfe) &&
-		       ((ip6->dst_address.as_u8[1] & 0xc0) == 0x80)))
-		    {
-		      // Inner desitnation is IPv6 link local
-		      gtp4 = true;
-		    }
-		}
-	    }
-
-	  if (gtp4)
-	    {
-	      next0 = srv6_gtp4_decap_processing (vm, node, b0);
-	      if (PREDICT_TRUE (next0 == SRV6_T_M_GTP4_D_NEXT_LOOKUP6))
-		good_n++;
-	      else
-		bad_n++;
-	    }
-	  else
-	    {
-	      /* Strip off the outer header (IPv4 + GTP + UDP + IEs) */
-	      vlib_buffer_advance (b0, (word) hdrlen);
-
-	      if (ipv4)
-		{
-		  next0 = SRV6_T_M_GTP4_D_NEXT_LOOKUP4;
-		  vnet_buffer (b0)->sw_if_index[VLIB_TX] =
-		    ls_param->fib4_index;
-		}
-	      else
-		{
-		  next0 = SRV6_T_M_GTP4_D_NEXT_LOOKUP6;
-		  vnet_buffer (b0)->sw_if_index[VLIB_TX] =
-		    ls_param->fib6_index;
-		}
-	    }
-
-	  vlib_validate_buffer_enqueue_x1 (vm, node, next_index, to_next,
-					   n_left_to_next, bi0, next0);
-	}
+                  next0 = SRV6_T_M_GTP4_D_NEXT_LOOKUP6;
+                  vnet_buffer (b0)->sw_if_index[VLIB_TX] = 0;
+                }
+              else
+                {
+                  if (ipv4)
+                    {
+                      next0 = SRV6_T_M_GTP4_D_NEXT_LOOKUP4;
+                      vnet_buffer (b0)->sw_if_index[VLIB_TX] = ls_param->fib4_index;
+                    }
+                  else
+                    {
+                      next0 = SRV6_T_M_GTP4_D_NEXT_LOOKUP6;
+                      vnet_buffer (b0)->sw_if_index[VLIB_TX] = ls_param->fib6_index;
+                    }
+                }
+            }
+    
+DONE:
+          vlib_validate_buffer_enqueue_x1 (vm, node, next_index, to_next,
+                           n_left_to_next, bi0, next0);
+        }
 
       vlib_put_next_frame (vm, node, next_index, n_left_to_next);
     }
@@ -1652,14 +1690,12 @@ VLIB_NODE_FN (srv6_end_m_gtp6_e)
 
 // Function for SRv6 GTP6.D function
 static inline u32
-srv6_gtp6_decap_processing (vlib_main_t *vm, vlib_node_runtime_t *node,
-			    vlib_buffer_t *b0)
+srv6_gtp6_decap_processing (vlib_main_t * vm,
+                vlib_node_runtime_t * node, vlib_buffer_t * b0,
+                srv6_end_gtp6_d_param_t *ls_param)
 {
   srv6_end_main_v6_decap_t *sm = &srv6_end_main_v6_decap;
   ip6_sr_main_t *sm2 = &sr_main;
-
-  ip6_sr_localsid_t *ls0;
-  srv6_end_gtp6_d_param_t *ls_param;
 
   ip6_gtpu_header_t *hdr0 = NULL;
   uword len0;
@@ -1681,11 +1717,6 @@ srv6_gtp6_decap_processing (vlib_main_t *vm, vlib_node_runtime_t *node,
   u8 ie_buf[GTPU_IE_MAX_SIZ];
 
   u32 next0 = SRV6_END_M_GTP6_D_NEXT_LOOKUP6;
-
-  ls0 = pool_elt_at_index (sm2->localsids,
-			   vnet_buffer (b0)->ip.adj_index[VLIB_TX]);
-
-  ls_param = (srv6_end_gtp6_d_param_t *) ls0->plugin_mem;
 
   hdr0 = vlib_buffer_get_current (b0);
 
@@ -2092,6 +2123,10 @@ VLIB_NODE_FN (srv6_end_m_gtp6_d)
   ip6_sr_localsid_t *ls0;
   srv6_end_gtp6_d_param_t *ls_param;
 
+  ip6_header_t *iph;
+
+  u32 teid;
+
   u32 good_n = 0, bad_n = 0;
 
   from = vlib_frame_vector_args (frame);
@@ -2105,119 +2140,161 @@ VLIB_NODE_FN (srv6_end_m_gtp6_d)
       vlib_get_next_frame (vm, node, next_index, to_next, n_left_to_next);
 
       while (n_left_from > 0 && n_left_to_next > 0)
-	{
-	  u32 bi0;
-	  vlib_buffer_t *b0;
+        {
+          u32 bi0;
+          vlib_buffer_t *b0;
 
-	  u32 next0;
+          u32 next0;
 
-	  ip6_gtpu_header_t *hdr;
-	  u32 hdrlen;
-	  u8 gtpu_type;
-	  bool gtp6;
-	  bool ipv4;
+          ip6_gtpu_header_t *hdr;
+          u32 hdrlen;
+          u8 gtpu_type;
+          bool gtp6;
+          bool ipv4;
+    
+          // defaults
+          bi0 = from[0];
+          to_next[0] = bi0;
+          from += 1;
+          to_next += 1;
+          n_left_from -= 1;
+          n_left_to_next -= 1;
+    
+          b0 = vlib_get_buffer (vm, bi0);
+    
+          ls0 = pool_elt_at_index (sm2->localsids,
+                       vnet_buffer (b0)->ip.adj_index[VLIB_TX]);
+    
+          ls_param = (srv6_end_gtp6_d_param_t *) ls0->plugin_mem;
+    
+          hdr = vlib_buffer_get_current (b0);
+          gtpu_type = hdr->gtpu.type;
+    
+          if (ls_param->tedb != NULL)
+            {
+              struct sr_table_node *node;
 
-	  // defaults
-	  bi0 = from[0];
-	  to_next[0] = bi0;
-	  from += 1;
-	  to_next += 1;
-	  n_left_from -= 1;
-	  n_left_to_next -= 1;
+              //teid = clib_net_to_host_u32 (hdr->gtpu.teid);
+              teid = hdr->gtpu.teid;
+              node = sr_table_node_match (ls_param->tedb, (u8 *)&teid, 32);
+              if (node != NULL)
+                {
+                  ls_param = (srv6_end_gtp6_d_param_t *)sr_table_node_get_data (node);
+                }
+            }
 
-	  b0 = vlib_get_buffer (vm, bi0);
+          if (PREDICT_FALSE ((ls_param == NULL) || (ls_param->sr_prefixlen == 0)))
+            {
+              next0 = SRV6_END_M_GTP6_D_NEXT_DROP;
+              goto DONE;
+            }
 
-	  ls0 = pool_elt_at_index (sm2->localsids,
-				   vnet_buffer (b0)->ip.adj_index[VLIB_TX]);
+          gtp6 = false;
+          ipv4 = true;
+    
+          if (PREDICT_FALSE (gtpu_type != GTPU_TYPE_GTPU || ls_param->drop_in))
+            {
+              gtp6 = true;
+            }
+          else
+            {
+              ip6_header_t *ip6;
+    
+              hdrlen = sizeof (ip6_gtpu_header_t);
+    
+              if (hdr->gtpu.ver_flags & (GTPU_EXTHDR_FLAG | GTPU_SEQ_FLAG))
+                {
+                  hdrlen += sizeof (gtpu_exthdr_t);
+                  if (hdr->gtpu.ext->nextexthdr == GTPU_EXTHDR_PDU_SESSION)
+                    {
+                      gtpu_pdu_session_t *sess;
+                      sess = (gtpu_pdu_session_t *) (((char *) hdr) + hdrlen);
+                      hdrlen += sizeof (gtpu_pdu_session_t);
+    
+                      if (sess->u.val & GTPU_PDU_SESSION_P_BIT_MASK)
+                        {
+                          hdrlen += sizeof (gtpu_paging_policy_t);
+                        }
+                    }
+                }
+    
+              ip6 = (ip6_header_t *) (((char *) hdr) + hdrlen);
+              if ((clib_net_to_host_u32
+               (ip6->ip_version_traffic_class_and_flow_label) >> 28) == 6)
+                {
+                  ipv4 = false;
+                  if (((ip6->dst_address.as_u8[0] == 0xff)
+                    && (ip6->dst_address.as_u8[1] == 0x02)) ||
+                      ((ip6->dst_address.as_u8[0] == 0xfe)
+                    && ((ip6->dst_address.as_u8[1] & 0xc0) == 0x80)))
+                    {
+                      // Inner desitnation is IPv6 link local
+                      gtp6 = true;
+                    }
+                }
+            }
+    
+          if (gtp6)
+            {
+              next0 = srv6_gtp6_decap_processing (vm, node, b0, ls_param);
+              if (PREDICT_TRUE (next0 == SRV6_END_M_GTP6_D_NEXT_LOOKUP6))
+                good_n++;
+              else
+                bad_n++;
+    
+              vlib_increment_combined_counter
+                (((next0 ==
+                SRV6_END_M_GTP6_D_NEXT_DROP) ?
+                &(sm2->sr_ls_invalid_counters) : &(sm2->
+                                 sr_ls_valid_counters)),
+                thread_index, ls0 - sm2->localsids, 1,
+                vlib_buffer_length_in_chain (vm, b0));
+            }
+          else
+            {
+              /* Strip off the outer header (IPv6 + GTP + UDP + IEs) */
+              vlib_buffer_advance (b0, (word) hdrlen);
+    
+              if (ls_param->sid_present)
+                {
+                  vlib_buffer_advance (b0, -(word) sizeof (ip6_header_t));
+                  iph = vlib_buffer_get_current (b0);
 
-	  ls_param = (srv6_end_gtp6_d_param_t *) ls0->plugin_mem;
+                  clib_memcpy_fast (iph, &ls_param->ip, sizeof (ip6_header_t));
 
-	  hdr = vlib_buffer_get_current (b0);
-	  gtpu_type = hdr->gtpu.type;
+                  if (ipv4)
+                    {
+                      iph->protocol = IP_PROTOCOL_IP_IN_IP;
+                    }
+                  else
+                    {
+                      iph->protocol = IP_PROTOCOL_IPV6;
+                    }
 
-	  gtp6 = false;
-	  ipv4 = true;
+                  iph->payload_length = clib_host_to_net_u16 (b0->current_length - sizeof (ip6_header_t));
 
-	  if (PREDICT_FALSE (gtpu_type != GTPU_TYPE_GTPU || ls_param->drop_in))
-	    {
-	      gtp6 = true;
-	    }
-	  else
-	    {
-	      ip6_header_t *ip6;
-
-	      hdrlen = sizeof (ip6_gtpu_header_t);
-
-	      if (hdr->gtpu.ver_flags & (GTPU_EXTHDR_FLAG | GTPU_SEQ_FLAG))
-		{
-		  hdrlen += sizeof (gtpu_exthdr_t);
-		  if (hdr->gtpu.ext->nextexthdr == GTPU_EXTHDR_PDU_SESSION)
-		    {
-		      gtpu_pdu_session_t *sess;
-		      sess = (gtpu_pdu_session_t *) (((char *) hdr) + hdrlen);
-		      hdrlen += sizeof (gtpu_pdu_session_t);
-
-		      if (sess->u.val & GTPU_PDU_SESSION_P_BIT_MASK)
-			{
-			  hdrlen += sizeof (gtpu_paging_policy_t);
-			}
-		    }
-		}
-
-	      ip6 = (ip6_header_t *) (((char *) hdr) + hdrlen);
-	      if ((clib_net_to_host_u32 (
-		     ip6->ip_version_traffic_class_and_flow_label) >>
-		   28) == 6)
-		{
-		  ipv4 = false;
-		  if (((ip6->dst_address.as_u8[0] == 0xff) &&
-		       (ip6->dst_address.as_u8[1] == 0x02)) ||
-		      ((ip6->dst_address.as_u8[0] == 0xfe) &&
-		       ((ip6->dst_address.as_u8[1] & 0xc0) == 0x80)))
-		    {
-		      // Inner desitnation is IPv6 link local
-		      gtp6 = true;
-		    }
-		}
-	    }
-
-	  if (gtp6)
-	    {
-	      next0 = srv6_gtp6_decap_processing (vm, node, b0);
-	      if (PREDICT_TRUE (next0 == SRV6_END_M_GTP6_D_NEXT_LOOKUP6))
-		good_n++;
-	      else
-		bad_n++;
-
-	      vlib_increment_combined_counter (
-		((next0 == SRV6_END_M_GTP6_D_NEXT_DROP) ?
-		   &(sm2->sr_ls_invalid_counters) :
-		   &(sm2->sr_ls_valid_counters)),
-		thread_index, ls0 - sm2->localsids, 1,
-		vlib_buffer_length_in_chain (vm, b0));
-	    }
-	  else
-	    {
-	      /* Strip off the outer header (IPv6 + GTP + UDP + IEs) */
-	      vlib_buffer_advance (b0, (word) hdrlen);
-
-	      if (ipv4)
-		{
-		  next0 = SRV6_END_M_GTP6_D_NEXT_LOOKUP4;
-		  vnet_buffer (b0)->sw_if_index[VLIB_TX] =
-		    ls_param->fib4_index;
-		}
-	      else
-		{
-		  next0 = SRV6_END_M_GTP6_D_NEXT_LOOKUP6;
-		  vnet_buffer (b0)->sw_if_index[VLIB_TX] =
-		    ls_param->fib6_index;
-		}
-	    }
-
-	  vlib_validate_buffer_enqueue_x1 (vm, node, next_index, to_next,
-					   n_left_to_next, bi0, next0);
-	}
+                  next0 = SRV6_END_M_GTP6_D_NEXT_LOOKUP6;
+                  vnet_buffer (b0)->sw_if_index[VLIB_TX] = 0;
+                }
+              else
+                {
+                  if (ipv4)
+                    {
+                      next0 = SRV6_END_M_GTP6_D_NEXT_LOOKUP4;
+                      vnet_buffer (b0)->sw_if_index[VLIB_TX] = ls_param->fib4_index;
+                    }
+                  else
+                    {
+                      next0 = SRV6_END_M_GTP6_D_NEXT_LOOKUP6;
+                      vnet_buffer (b0)->sw_if_index[VLIB_TX] = ls_param->fib6_index;
+                    }
+                }
+            }
+    
+DONE:
+          vlib_validate_buffer_enqueue_x1 (vm, node, next_index, to_next,
+                           n_left_to_next, bi0, next0);
+        }
 
       vlib_put_next_frame (vm, node, next_index, n_left_to_next);
     }

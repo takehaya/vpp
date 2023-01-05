@@ -107,8 +107,8 @@ static dpo_type_t sr_pr_bsid_insert_dpo_type;
 /**
  * @brief IPv6 SA for encapsulated packets
  */
-static ip6_address_t sr_pr_encaps_src;
-static u8 sr_pr_encaps_hop_limit = IPv6_DEFAULT_HOP_LIMIT;
+ip6_address_t sr_pr_encaps_src;
+u8 sr_pr_encaps_hop_limit = IPv6_DEFAULT_HOP_LIMIT;
 
 /******************* SR rewrite set encaps IPv6 source addr *******************/
 /* Note:  This is temporal. We don't know whether to follow this path or
@@ -1032,6 +1032,8 @@ sr_policy_command_fn (vlib_main_t * vm, unformat_input_t * input,
 	{
 	  sr_policy_fn_registration_t *plugin = 0, **vec_plugins = 0;
 	  sr_policy_fn_registration_t **plugin_it = 0;
+      ip6_sr_policy_t *sr_policy = 0;
+      uword *p;
 
 	  /* *INDENT-OFF* */
 	  pool_foreach (plugin, sm->policy_plugin_functions)
@@ -1040,12 +1042,29 @@ sr_policy_command_fn (vlib_main_t * vm, unformat_input_t * input,
 	    }
 	  /* *INDENT-ON* */
 
+      if (sr_policy_index == (u32) ~ 0)
+        {
+          p = mhash_get (&sm->sr_policies_index_hash, &bsid);
+          if (p)
+            sr_policy = pool_elt_at_index (sm->sr_policies, p[0]);
+        }
+      else
+        {
+          sr_policy = pool_elt_at_index (sm->sr_policies, sr_policy_index);
+        }
+
+      if (sr_policy)
+        {
+          ls_plugin_mem = sr_policy->plugin_mem;
+        }
+
 	  vec_foreach (plugin_it, vec_plugins)
 	  {
 	    if (unformat
 		(input, "%U", (*plugin_it)->ls_unformat, &ls_plugin_mem))
 	      {
 		behavior = (*plugin_it)->sr_policy_function_number;
+		operation = 4;
 		break;
 	      }
 	  }
@@ -1088,16 +1107,23 @@ sr_policy_command_fn (vlib_main_t * vm, unformat_input_t * input,
     {
       if (!operation)
 	return clib_error_return (0, "No SL modification specified");
-      if (operation != 1 && sl_index == (u32) ~ 0)
+      if ((operation == 2 || operation == 3) && sl_index == (u32) ~ 0)
 	return clib_error_return (0, "No Segment List index specified");
       if (operation == 1 && vec_len (segments) == 0)
 	return clib_error_return (0, "No Segment List specified");
       if (operation == 3 && weight == (u32) ~ 0)
 	return clib_error_return (0, "No new weight for the SL specified");
 
+	  if (operation != 4)
+	    {
       rv = sr_policy_mod ((sr_policy_index != (u32) ~0 ? NULL : &bsid),
 			  sr_policy_index, fib_table, operation, segments,
 			  encap_src_v6addr, sl_index, weight);
+		}
+      else
+		{
+          rv = 0;
+		}
 
       if (segments)
 	vec_free (segments);

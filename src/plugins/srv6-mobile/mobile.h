@@ -28,6 +28,8 @@
 #include <vppinfra/error.h>
 #include <vppinfra/elog.h>
 
+#include "sr_mobile_util_table.h"
+
 #define SRV6_GTP_UDP_DST_PORT 2152
 
 #define SRV6_NHTYPE_NONE 	0
@@ -215,6 +217,12 @@ typedef struct srv6_end_gtp6_d_param_s
   u32 fib_table;
   u32 fib4_index;
   u32 fib6_index;
+
+  bool sid_present;
+  ip6_address_t sid;
+  ip6_header_t ip;
+
+  struct sr_table *tedb;
 } srv6_end_gtp6_d_param_t;
 
 /* GTP6.DT */
@@ -272,6 +280,12 @@ typedef struct srv6_end_gtp4_d_param_s
   u32 fib_table;
   u32 fib4_index;
   u32 fib6_index;
+
+  bool sid_present;
+  ip6_address_t sid;
+  ip6_header_t ip;
+
+  struct sr_table *tedb;
 } srv6_end_gtp4_d_param_t;
 
 typedef struct srv6_end_main_v4_s

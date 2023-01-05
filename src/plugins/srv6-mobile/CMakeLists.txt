@@ -22,6 +22,7 @@ add_vpp_plugin(srv6mobile
   gtp6_dt.c
   node.c
   sr_mobile_api.c
+  sr_mobile_util_table.c
 
   API_FILES
   sr_mobile.api
