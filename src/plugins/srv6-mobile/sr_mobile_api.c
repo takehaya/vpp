@@ -301,6 +301,7 @@ vl_api_sr_mobile_policy_add_t_handler (vl_api_sr_mobile_policy_add_t *mp)
 
   rv = sr_policy_add (&bsid_addr,
 		      segments,		      // ignore segments
+		      NULL,		      // ignore encap_src_v6addr
 		      (u32) ~0,		      // ignore weight
 		      SR_POLICY_TYPE_DEFAULT, // ignore type
 		      (u32) ~0,		      // ignore fib_table
