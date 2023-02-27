@@ -71,7 +71,8 @@ static u8 keyword_str[] = "t.m.gtp4.d";
 static u8 def_str[] =
   "Transit function with decapsulation for IPv4/GTP tunnel";
 static u8 param_str[] =
-  "<sr-prefix>/<sr-prefixlen> v6src_prefix <v6src_prefix>/<prefixlen> [nhtype <nhtype>] fib-table <id> teid <teid>/<length> sid <sid>";
+  "<sr-prefix>/<sr-prefixlen> v6src_prefix <v6src_prefix>/<prefixlen> [nhtype "
+  "<nhtype>] fib-table <id> teid <teid>/<length> sid <sid>";
 
 static u8 *
 clb_format_srv6_t_m_gtp4_d (u8 * s, va_list * args)
@@ -113,9 +114,9 @@ u32
 alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
 			     const u32 v6src_prefixlen, const void *sr_prefix,
 			     const u32 sr_prefixlen, const u32 fib_table,
-			     const u8 nhtype, const bool drop_in, 
-           const bool is_sid, const void *lsid,
-           const bool is_teid, u32 teid, const u32 teid_len)
+			     const u8 nhtype, const bool drop_in,
+			     const bool is_sid, const void *lsid,
+			     const bool is_teid, u32 teid, const u32 teid_len)
 {
   srv6_end_gtp4_d_param_t *ls_mem, *p_mem;
   ip6_header_t *iph;
@@ -142,16 +143,16 @@ alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
       ls_mem->sid_present = is_sid;
       ls_mem->sid = sid;
       if (is_sid)
-        {
-          iph = &ls_mem->ip;
-          iph->ip_version_traffic_class_and_flow_label =
-            clib_host_to_net_u32(0 | ((6 & 0xF) << 28));
-          iph->src_address.as_u64[0] = sr_pr_encaps_src.as_u64[0];
-          iph->src_address.as_u64[1] = sr_pr_encaps_src.as_u64[1];
-          iph->dst_address.as_u64[0] = sid.as_u64[0];
-          iph->dst_address.as_u64[1] = sid.as_u64[1];
-          iph->hop_limit = sr_pr_encaps_hop_limit;
-        }
+	{
+	  iph = &ls_mem->ip;
+	  iph->ip_version_traffic_class_and_flow_label =
+	    clib_host_to_net_u32 (0 | ((6 & 0xF) << 28));
+	  iph->src_address.as_u64[0] = sr_pr_encaps_src.as_u64[0];
+	  iph->src_address.as_u64[1] = sr_pr_encaps_src.as_u64[1];
+	  iph->dst_address.as_u64[0] = sid.as_u64[0];
+	  iph->dst_address.as_u64[1] = sid.as_u64[1];
+	  iph->hop_limit = sr_pr_encaps_hop_limit;
+	}
 
       ls_mem->fib_table = fib_table;
       ls_mem->fib4_index = ip4_fib_index_from_table_id (fib_table);
@@ -161,64 +162,64 @@ alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
     {
       ls_mem = *plugin_mem_p;
       if (ls_mem == NULL)
-        {
-          ls_mem = clib_mem_alloc_aligned_at_offset (sizeof *ls_mem, 0, 0, 1);
-          clib_memset (ls_mem, 0, sizeof *ls_mem);
-          *plugin_mem_p = ls_mem;
-        }
+	{
+	  ls_mem = clib_mem_alloc_aligned_at_offset (sizeof *ls_mem, 0, 0, 1);
+	  clib_memset (ls_mem, 0, sizeof *ls_mem);
+	  *plugin_mem_p = ls_mem;
+	}
 
-        if (ls_mem->tedb == NULL)
-          {
-            ls_mem->tedb = sr_table_new (AF_INET, 32, NULL);
-            if (ls_mem->tedb == NULL)
-              {
-                return 0;
-              }
-          }
+      if (ls_mem->tedb == NULL)
+	{
+	  ls_mem->tedb = sr_table_new (AF_INET, 32, NULL);
+	  if (ls_mem->tedb == NULL)
+	    {
+	      return 0;
+	    }
+	}
 
-        teid = clib_host_to_net_u32(teid);
-        node = sr_table_node_get (ls_mem->tedb, (u8 *)&teid, teid_len);
-        if (node == NULL)
-          {
-            return 0;
-          }
+      teid = clib_host_to_net_u32 (teid);
+      node = sr_table_node_get (ls_mem->tedb, (u8 *) &teid, teid_len);
+      if (node == NULL)
+	{
+	  return 0;
+	}
 
-        p_mem = sr_table_node_get_data (node);
-        if (p_mem == NULL)
-          {
-            p_mem = clib_mem_alloc_aligned_at_offset (sizeof *p_mem, 0, 0, 1);
-            clib_memset (p_mem, 0, sizeof *p_mem);
-            sr_table_node_set_data (node, p_mem);
-          }
+      p_mem = sr_table_node_get_data (node);
+      if (p_mem == NULL)
+	{
+	  p_mem = clib_mem_alloc_aligned_at_offset (sizeof *p_mem, 0, 0, 1);
+	  clib_memset (p_mem, 0, sizeof *p_mem);
+	  sr_table_node_set_data (node, p_mem);
+	}
 
-        memcpy (&p_mem->sr_prefix, sr_prefix, sizeof (ip6_address_t));
-        p_mem->sr_prefixlen = sr_prefixlen;
+      memcpy (&p_mem->sr_prefix, sr_prefix, sizeof (ip6_address_t));
+      p_mem->sr_prefixlen = sr_prefixlen;
 
-        memcpy (&p_mem->v6src_prefix, v6src_prefix, sizeof (ip6_address_t));
-        p_mem->v6src_prefixlen = v6src_prefixlen;
+      memcpy (&p_mem->v6src_prefix, v6src_prefix, sizeof (ip6_address_t));
+      p_mem->v6src_prefixlen = v6src_prefixlen;
 
-        p_mem->nhtype = nhtype;
-        p_mem->drop_in = drop_in;
+      p_mem->nhtype = nhtype;
+      p_mem->drop_in = drop_in;
 
-        p_mem->sid_present = is_sid;
+      p_mem->sid_present = is_sid;
 
-        if (is_sid)
-          {
-            iph = &p_mem->ip;
-            iph->ip_version_traffic_class_and_flow_label =
-            clib_host_to_net_u32(0 | ((6 & 0xF) << 28));
-            iph->src_address.as_u64[0] = sr_pr_encaps_src.as_u64[0];
-            iph->src_address.as_u64[1] = sr_pr_encaps_src.as_u64[1];
-            iph->dst_address.as_u64[0] = sid.as_u64[0];
-            iph->dst_address.as_u64[1] = sid.as_u64[1];
-            iph->hop_limit = sr_pr_encaps_hop_limit;
-        }           
+      if (is_sid)
+	{
+	  iph = &p_mem->ip;
+	  iph->ip_version_traffic_class_and_flow_label =
+	    clib_host_to_net_u32 (0 | ((6 & 0xF) << 28));
+	  iph->src_address.as_u64[0] = sr_pr_encaps_src.as_u64[0];
+	  iph->src_address.as_u64[1] = sr_pr_encaps_src.as_u64[1];
+	  iph->dst_address.as_u64[0] = sid.as_u64[0];
+	  iph->dst_address.as_u64[1] = sid.as_u64[1];
+	  iph->hop_limit = sr_pr_encaps_hop_limit;
+	}
 
-        p_mem->fib_table = fib_table;
-        p_mem->fib4_index = ip4_fib_index_from_table_id (fib_table);
-        p_mem->fib6_index = ip6_fib_index_from_table_id (fib_table);
+      p_mem->fib_table = fib_table;
+      p_mem->fib4_index = ip4_fib_index_from_table_id (fib_table);
+      p_mem->fib6_index = ip6_fib_index_from_table_id (fib_table);
     }
-    return 1;
+  return 1;
 }
 
 static uword
@@ -241,66 +242,66 @@ clb_unformat_srv6_t_m_gtp4_d (unformat_input_t * input, va_list * args)
 
   while (unformat_check_input (input) != UNFORMAT_END_OF_INPUT)
     {
-      if (unformat 
-        (input, "t.m.gtp4.d %U/%d v6src_prefix %U/%d nhtype ipv4 fib-table %d",
-        unformat_ip6_address, &sr_prefix, &sr_prefixlen, unformat_ip6_address,
-        &v6src_prefix, &v6src_prefixlen, &fib_table))
-        {
-          config = true;
-          nhtype = SRV6_NHTYPE_IPV4;
-        }
-      else if (unformat
-	    (input,
-	    "t.m.gtp4.d %U/%d v6src_prefix %U/%d nhtype ipv6 fib-table %d",
+      if (unformat (
+	    input,
+	    "t.m.gtp4.d %U/%d v6src_prefix %U/%d nhtype ipv4 fib-table %d",
 	    unformat_ip6_address, &sr_prefix, &sr_prefixlen,
 	    unformat_ip6_address, &v6src_prefix, &v6src_prefixlen, &fib_table))
-        {
-          config = true;
-          nhtype = SRV6_NHTYPE_IPV6;
-        }
-      else if (unformat
-	    (input, "t.m.gtp4.d %U/%d v6src_prefix %U/%d nhtype non-ip",
-	    unformat_ip6_address, &sr_prefix, &sr_prefixlen,
-	    unformat_ip6_address, &v6src_prefix, &v6src_prefixlen))
-        {
-          config = true;
-          nhtype = SRV6_NHTYPE_NON_IP;
-        }
-      else if (unformat
-	    (input, "t.m.gtp4.d %U/%d v6src_prefix %U/%d fib-table %d",
-	    unformat_ip6_address, &sr_prefix, &sr_prefixlen,
-	    unformat_ip6_address, &v6src_prefix, &v6src_prefixlen, &fib_table))
-        {
-          config = true;
-          nhtype = SRV6_NHTYPE_NONE;
-        }
-      else if (unformat
-	    (input, "t.m.gtp4.d %U/%d v6src_prefix %U/%d",
-	    unformat_ip6_address, &sr_prefix, &sr_prefixlen,
-	    unformat_ip6_address, &v6src_prefix, &v6src_prefixlen))
-        {
-          config = true;
-          nhtype = SRV6_NHTYPE_NONE;
-        }
-      else if (unformat
-        (input, "teid %d/%d", &teid, &teid_len))
-        {
-          is_teid = true;
-        }
-      else if (unformat
-        (input, "sid %U", unformat_ip6_address, &sid))
-        {
-          is_sid = true;
-        }
-      else if (unformat
-        (input, "drop-in"))
-        {
-          drop_in = true;
-        }
+	{
+	  config = true;
+	  nhtype = SRV6_NHTYPE_IPV4;
+	}
+      else if (unformat (input,
+			 "t.m.gtp4.d %U/%d v6src_prefix %U/%d nhtype ipv6 "
+			 "fib-table %d",
+			 unformat_ip6_address, &sr_prefix, &sr_prefixlen,
+			 unformat_ip6_address, &v6src_prefix, &v6src_prefixlen,
+			 &fib_table))
+	{
+	  config = true;
+	  nhtype = SRV6_NHTYPE_IPV6;
+	}
+      else if (unformat (
+		 input, "t.m.gtp4.d %U/%d v6src_prefix %U/%d nhtype non-ip",
+		 unformat_ip6_address, &sr_prefix, &sr_prefixlen,
+		 unformat_ip6_address, &v6src_prefix, &v6src_prefixlen))
+	{
+	  config = true;
+	  nhtype = SRV6_NHTYPE_NON_IP;
+	}
+      else if (unformat (input,
+			 "t.m.gtp4.d %U/%d v6src_prefix %U/%d fib-table %d",
+			 unformat_ip6_address, &sr_prefix, &sr_prefixlen,
+			 unformat_ip6_address, &v6src_prefix, &v6src_prefixlen,
+			 &fib_table))
+	{
+	  config = true;
+	  nhtype = SRV6_NHTYPE_NONE;
+	}
+      else if (unformat (input, "t.m.gtp4.d %U/%d v6src_prefix %U/%d",
+			 unformat_ip6_address, &sr_prefix, &sr_prefixlen,
+			 unformat_ip6_address, &v6src_prefix,
+			 &v6src_prefixlen))
+	{
+	  config = true;
+	  nhtype = SRV6_NHTYPE_NONE;
+	}
+      else if (unformat (input, "teid %d/%d", &teid, &teid_len))
+	{
+	  is_teid = true;
+	}
+      else if (unformat (input, "sid %U", unformat_ip6_address, &sid))
+	{
+	  is_sid = true;
+	}
+      else if (unformat (input, "drop-in"))
+	{
+	  drop_in = true;
+	}
       else
-        {
-          return 0;
-        }
+	{
+	  return 0;
+	}
     }
 
   if (!config)
@@ -308,10 +309,9 @@ clb_unformat_srv6_t_m_gtp4_d (unformat_input_t * input, va_list * args)
       return 0;
     }
 
-  return alloc_param_srv6_t_m_gtp4_d (plugin_mem_p, &v6src_prefix, v6src_prefixlen,
-			       &sr_prefix, sr_prefixlen, fib_table, nhtype,
-			       drop_in, is_sid, &sid, is_teid, teid, teid_len);
-
+  return alloc_param_srv6_t_m_gtp4_d (
+    plugin_mem_p, &v6src_prefix, v6src_prefixlen, &sr_prefix, sr_prefixlen,
+    fib_table, nhtype, drop_in, is_sid, &sid, is_teid, teid, teid_len);
 }
 
 static int
