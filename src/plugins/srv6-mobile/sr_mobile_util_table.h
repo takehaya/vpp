@@ -23,7 +23,7 @@ struct sr_table_node
 
   void *info;
 
-  _Atomic u32 lock;
+  u32 lock;
 
   u8 active;
 #define PTREE_NODE_INACTIVE 0

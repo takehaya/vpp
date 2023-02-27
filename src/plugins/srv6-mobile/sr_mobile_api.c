@@ -100,11 +100,23 @@ vl_api_sr_mobile_localsid_add_del_t_handler (
   u16 behavior = 0;
   u32 dt_type;
   size_t behavior_size = 0;
+  bool is_sid = false;
+  bool is_teid = false;
+  ip6_address_t sid_addr;
+
   mobile_localsid_function_list_t kind_fn =
     SRV6_MOBILE_LOCALSID_UNKNOWN_FUNCTION;
 
   mp->behavior[sizeof (mp->behavior) - 1] = '\0';
   behavior_size = sizeof (mp->behavior);
+
+  ip6_address_decode (mp->sid_addr, &sid_addr);
+  if(ip6_address_is_zero(&sid_addr)){
+	is_sid = true;
+  }
+  if(mp->teid_len){
+	is_teid = true;
+  }
   // search behavior index
   if (mp->behavior[0])
     {
@@ -150,6 +162,7 @@ vl_api_sr_mobile_localsid_add_del_t_handler (
 	{
 	  return;
 	}
+
       switch (kind_fn)
 	{
 	case SRV6_MOBILE_LOCALSID_END_M_GTP4_E:
@@ -164,7 +177,7 @@ vl_api_sr_mobile_localsid_add_del_t_handler (
 	case SRV6_MOBILE_LOCALSID_END_M_GTP6_D:
 	  alloc_param_srv6_end_m_gtp6_d (
 	    &ls_plugin_mem, &mp->sr_prefix.address, mp->sr_prefix.len,
-	    (u8) ntohl (mp->nhtype), mp->drop_in, ntohl (mp->fib_table));
+	    (u8) ntohl (mp->nhtype), mp->drop_in, ntohl (mp->fib_table), is_sid, &mp->sid_addr, is_teid, mp->teid, mp->teid_len);
 	  break;
 	case SRV6_MOBILE_LOCALSID_END_M_GTP6_D_DI:
 	  alloc_param_srv6_end_m_gtp6_di (
@@ -216,6 +229,9 @@ vl_api_sr_mobile_policy_add_t_handler (vl_api_sr_mobile_policy_add_t *mp)
   void *ls_plugin_mem = 0;
   u16 behavior = 0;
   size_t behavior_size = 0;
+  bool is_sid = false;
+  bool is_teid = false;
+  ip6_address_t sid_addr;
 
   u32 dt_type;
   mobile_policy_function_list_t kind_fn = SRV6_MOBILE_POLICY_UNKNOWN_FUNCTION;
@@ -224,6 +240,13 @@ vl_api_sr_mobile_policy_add_t_handler (vl_api_sr_mobile_policy_add_t *mp)
   mp->behavior[sizeof (mp->behavior) - 1] = '\0';
   behavior_size = sizeof (mp->behavior);
 
+  ip6_address_decode (mp->sid_addr, &sid_addr);
+  if(ip6_address_is_zero(&sid_addr)){
+	is_sid = true;
+  }
+  if(mp->teid_len){
+	is_teid = true;
+  }
   // search behavior index
   if (mp->behavior[0])
     {
@@ -266,12 +289,12 @@ vl_api_sr_mobile_policy_add_t_handler (vl_api_sr_mobile_policy_add_t *mp)
 	  alloc_param_srv6_t_m_gtp4_d (
 	    &ls_plugin_mem, &mp->v6src_prefix.address, mp->v6src_prefix.len,
 	    &mp->sr_prefix.address, mp->sr_prefix.len, ntohl (mp->fib_table),
-	    mp->nhtype, mp->drop_in);
+	    mp->nhtype, mp->drop_in, is_sid, &mp->sid_addr, is_teid, mp->teid, mp->teid_len);
 	  break;
 	case SRV6_MOBILE_POLICY_END_M_GTP6_D:
 	  alloc_param_srv6_end_m_gtp6_d (
 	    &ls_plugin_mem, &mp->sr_prefix.address, mp->sr_prefix.len,
-	    mp->nhtype, mp->drop_in, ntohl (mp->fib_table));
+	    mp->nhtype, mp->drop_in, ntohl (mp->fib_table), is_sid, &mp->sid_addr, is_teid, mp->teid, mp->teid_len);
 	  break;
 	case SRV6_MOBILE_POLICY_T_M_GTP4_DT4:
 	case SRV6_MOBILE_POLICY_T_M_GTP4_DT6:

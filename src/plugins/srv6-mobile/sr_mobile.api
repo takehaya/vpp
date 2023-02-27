@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-option version = "1.0.0";
+option version = "0.0.1";
 
 import "vnet/interface_types.api";
 import "vnet/ip/ip_types.api";
@@ -48,6 +48,9 @@ autoreply define sr_mobile_localsid_add_del
   vl_api_ip6_prefix_t sr_prefix;
   vl_api_ip4_address_t v4src_addr;
   u32 v4src_position;
+  vl_api_ip6_address_t sid_addr;
+  u32 teid;
+  u32 teid_len;
 };
 
 /** \brief IPv6 SR for Mobile policy add
@@ -76,4 +79,7 @@ autoreply define sr_mobile_policy_add
   u32 local_fib_table;
   bool drop_in;
   vl_api_sr_mobile_nhtype_t nhtype;
+  vl_api_ip6_address_t sid_addr;
+  u32 teid;
+  u32 teid_len;
 };

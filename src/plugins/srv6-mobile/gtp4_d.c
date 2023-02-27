@@ -126,7 +126,9 @@ alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
 
   if (is_teid == false)
     {
-      ls_mem = clib_mem_alloc_aligned_at_offset (sizeof *ls_mem, 0, 0, 1);
+      // ls_mem = clib_mem_alloc_aligned_at_offset (sizeof *ls_mem, 0, 0, 1);
+      ls_mem = clib_mem_alloc (sizeof *ls_mem);
+
       clib_memset (ls_mem, 0, sizeof *ls_mem);
       *plugin_mem_p = ls_mem;
 
@@ -163,7 +165,8 @@ alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
       ls_mem = *plugin_mem_p;
       if (ls_mem == NULL)
 	{
-	  ls_mem = clib_mem_alloc_aligned_at_offset (sizeof *ls_mem, 0, 0, 1);
+    ls_mem = clib_mem_alloc (sizeof *ls_mem);
+	  // ls_mem = clib_mem_alloc_aligned_at_offset (sizeof *ls_mem, 0, 0, 1);
 	  clib_memset (ls_mem, 0, sizeof *ls_mem);
 	  *plugin_mem_p = ls_mem;
 	}
@@ -187,7 +190,8 @@ alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
       p_mem = sr_table_node_get_data (node);
       if (p_mem == NULL)
 	{
-	  p_mem = clib_mem_alloc_aligned_at_offset (sizeof *p_mem, 0, 0, 1);
+	  // p_mem = clib_mem_alloc_aligned_at_offset (sizeof *p_mem, 0, 0, 1);
+    p_mem = clib_mem_alloc (sizeof *p_mem);
 	  clib_memset (p_mem, 0, sizeof *p_mem);
 	  sr_table_node_set_data (node, p_mem);
 	}

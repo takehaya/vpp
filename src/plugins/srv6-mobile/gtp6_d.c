@@ -117,7 +117,8 @@ alloc_param_srv6_end_m_gtp6_d (void **plugin_mem_p, const void *sr_prefix,
 
   if (ls_mem == NULL)
     {
-      ls_mem = clib_mem_alloc_aligned_at_offset (sizeof *ls_mem, 0, 0, 1);
+      // ls_mem = clib_mem_alloc_aligned_at_offset (sizeof *ls_mem, 0, 0, 1);
+      ls_mem = clib_mem_alloc (sizeof *ls_mem);
       clib_memset (ls_mem, 0, sizeof *ls_mem);
       *plugin_mem_p = ls_mem;
     }
@@ -142,7 +143,9 @@ alloc_param_srv6_end_m_gtp6_d (void **plugin_mem_p, const void *sr_prefix,
       p_mem = sr_table_node_get_data (node);
       if (p_mem == NULL)
 	{
-	  p_mem = clib_mem_alloc_aligned_at_offset (sizeof *p_mem, 0, 0, 1);
+    p_mem = clib_mem_alloc (sizeof *p_mem);
+
+	  // p_mem = clib_mem_alloc_aligned_at_offset (sizeof *p_mem, 0, 0, 1);
 	  clib_memset (p_mem, 0, sizeof *p_mem);
 	  sr_table_node_set_data (node, p_mem);
 	}
@@ -206,10 +209,8 @@ static uword
 clb_unformat_srv6_end_m_gtp6_d (unformat_input_t * input, va_list * args)
 {
   void **plugin_mem_p = va_arg (*args, void **);
-  srv6_end_gtp6_d_param_t *ls_mem, *p_mem;
   ip6_address_t sr_prefix;
   ip6_address_t sid;
-  ip6_header_t *iph;
   u32 sr_prefixlen;
   u32 teid = 0;
   u32 teid_len = 0;
@@ -219,7 +220,6 @@ clb_unformat_srv6_end_m_gtp6_d (unformat_input_t * input, va_list * args)
   bool is_teid = false;
   bool config = false;
   u32 fib_table = 0;
-  struct sr_table_node *node;
 
   while (unformat_check_input (input) != UNFORMAT_END_OF_INPUT)
     {

@@ -39,9 +39,12 @@ void alloc_param_srv6_end_m_gtp4_e (void **plugin_mem_p,
 
 void alloc_param_srv6_end_m_gtp6_e (void **plugin_mem_p, const u32 fib_table);
 
-void alloc_param_srv6_end_m_gtp6_d (void **plugin_mem_p, const void *sr_prefix,
-				    const u32 sr_prefixlen, const u8 nhtype,
-				    const bool drop_in, const u32 fib_table);
+u32 alloc_param_srv6_end_m_gtp6_d (void **plugin_mem_p, const void *sr_prefix,
+			       const u32 sr_prefixlen, const u8 nhtype,
+			       const bool drop_in, const u32 fib_table,
+			       const bool is_sid, const void *lsid,
+			       const bool is_teid, u32 teid,
+			       const u32 teid_len);
 
 void alloc_param_srv6_end_m_gtp6_di (void **plugin_mem_p,
 				     const void *sr_prefix,
@@ -51,12 +54,12 @@ void alloc_param_srv6_end_m_gtp6_dt (void **plugin_mem_p, const u32 fib_index,
 				     const u32 local_fib_index,
 				     const u32 type);
 
-void alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p,
-				  const void *v6src_prefix,
-				  const u32 v6src_prefixlen,
-				  const void *sr_prefix,
-				  const u32 sr_prefixlen, const u32 fib_index,
-				  const u8 nhtype, const bool drop_in);
+u32 alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
+			     const u32 v6src_prefixlen, const void *sr_prefix,
+			     const u32 sr_prefixlen, const u32 fib_table,
+			     const u8 nhtype, const bool drop_in,
+			     const bool is_sid, const void *lsid,
+			     const bool is_teid, u32 teid, const u32 teid_len);
 
 void alloc_param_srv6_t_m_gtp4_dt (void **plugin_mem_p, const u32 fib_index,
 				   const u32 local_fib_index, const u8 type);
