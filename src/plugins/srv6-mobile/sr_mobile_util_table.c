@@ -25,10 +25,18 @@ sr_table_new (u_int8_t family, u_int8_t max_keylen, sr_table_del_cb_t del)
     {
       return NULL;
     }
+  clib_memset (table, 0, sizeof(struct sr_table));
+
+  table->top = clib_mem_alloc(sizeof(struct sr_table_node));
+  if (!table->top)
+    {
+      return NULL;
+    }
+  clib_memset (table->top, 0, sizeof(struct sr_table_node));
 
   table->family = family;
   table->max_key_len = max_keylen;
-
+  
   table->max_key_siz = (max_keylen >> 3);
   if ((max_keylen & 0x7) != 0)
     {
@@ -117,6 +125,7 @@ sr_table_node_new (struct sr_table *table, u_int8_t *key, u_int8_t keylen)
     }
 
   node->key_len = keylen;
+  node->info = NULL;
   memcpy (node->key, key, table->max_key_siz);
 
   node->table = table;
@@ -251,10 +260,10 @@ sr_table_node_set_link (struct sr_table_node *n1, struct sr_table_node *n2)
 struct sr_table_node *
 sr_table_node_get (struct sr_table *table, u_int8_t *key, u_int8_t keylen)
 {
-  struct sr_table_node *match = NULL;
-  struct sr_table_node *node;
-  struct sr_table_node *new;
-  struct sr_table_node *n;
+  struct sr_table_node *match = 0;
+  struct sr_table_node *node = 0;
+  struct sr_table_node *new = 0;
+  struct sr_table_node *n = 0;
 
   if (keylen > table->max_key_len)
     {
@@ -549,7 +558,7 @@ DONE:
 void *
 sr_table_node_get_data (struct sr_table_node *node)
 {
-  if (node->active == PTREE_NODE_ACTIVE)
+  if (node->active == PTREE_NODE_ACTIVE && node->info != NULL)
     {
       return node->info;
     }

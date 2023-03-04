@@ -118,10 +118,10 @@ alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
 			     const bool is_sid, const void *lsid,
 			     const bool is_teid, u32 teid, const u32 teid_len)
 {
-  srv6_end_gtp4_d_param_t *ls_mem, *p_mem;
-  ip6_header_t *iph;
+  srv6_end_gtp4_d_param_t *ls_mem=0, *p_mem=0;
+  ip6_header_t *iph = 0;
   ip6_address_t sid;
-  struct sr_table_node *node;
+  struct sr_table_node *node=0;
   memcpy (&sid, lsid, sizeof (ip6_address_t));
 
   if (is_teid == false)
@@ -182,11 +182,10 @@ alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
 
       teid = clib_host_to_net_u32 (teid);
       node = sr_table_node_get (ls_mem->tedb, (u8 *) &teid, teid_len);
-      if (node == NULL)
+      if (!node)
 	{
 	  return 0;
 	}
-
       p_mem = sr_table_node_get_data (node);
       if (p_mem == NULL)
 	{

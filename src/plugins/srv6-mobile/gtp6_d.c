@@ -107,10 +107,10 @@ alloc_param_srv6_end_m_gtp6_d (void **plugin_mem_p, const void *sr_prefix,
 			       const bool is_teid, u32 teid,
 			       const u32 teid_len)
 {
-  srv6_end_gtp6_d_param_t *ls_mem, *p_mem;
-  ip6_header_t *iph;
+  srv6_end_gtp4_d_param_t *ls_mem=0, *p_mem=0;
+  ip6_header_t *iph = 0;
   ip6_address_t sid;
-  struct sr_table_node *node;
+  struct sr_table_node *node=0;
   memcpy (&sid, lsid, sizeof (ip6_address_t));
 
   ls_mem = *plugin_mem_p;
