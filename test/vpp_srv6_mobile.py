@@ -91,6 +91,9 @@ class VppSRv6MobilePolicy(VppObject):
         local_fib_table=0,
         drop_in=0,
         nhtype=SRv6MobileNhtype.SRV6_NHTYPE_API_NONE,
+        sid_addr="",
+        teid=0,
+        teid_len=0,
     ):
         self._test = test
         self.bsid_addr = bsid_addr
@@ -102,6 +105,9 @@ class VppSRv6MobilePolicy(VppObject):
         self.local_fib_table = local_fib_table
         self.drop_in = drop_in
         self.nhtype = nhtype
+        self.sid_addr = sid_addr
+        self.teid = teid
+        self.teid_len = teid_len
         self._configured = False
 
     def add_vpp_config(self):
@@ -115,6 +121,9 @@ class VppSRv6MobilePolicy(VppObject):
             local_fib_table=self.local_fib_table,
             drop_in=self.drop_in,
             nhtype=self.nhtype,
+            sid_addr=self.sid_addr,
+            teid=self.teid,
+            teid_len=self.teid_len,
         )
         self._configured = True
 

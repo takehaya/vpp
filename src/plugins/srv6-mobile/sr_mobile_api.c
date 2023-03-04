@@ -114,7 +114,7 @@ vl_api_sr_mobile_localsid_add_del_t_handler (
   if(ip6_address_is_zero(&sid_addr)){
 	is_sid = true;
   }
-  if(mp->teid_len){
+  if(mp->teid_len != 0){
 	is_teid = true;
   }
   // search behavior index
@@ -244,7 +244,7 @@ vl_api_sr_mobile_policy_add_t_handler (vl_api_sr_mobile_policy_add_t *mp)
   if(ip6_address_is_zero(&sid_addr)){
 	is_sid = true;
   }
-  if(mp->teid_len){
+  if(mp->teid_len != 0){
 	is_teid = true;
   }
   // search behavior index

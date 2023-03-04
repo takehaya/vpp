@@ -1140,6 +1140,7 @@ srv6_gtp4_decap_processing (vlib_main_t *vm, vlib_node_runtime_t *node,
 		       sizeof (tr->src.as_u8));
 	  clib_memcpy (tr->dst.as_u8, ip6srv->ip.dst_address.as_u8,
 		       sizeof (tr->dst.as_u8));
+		tr->teid = teid;
 	}
     }
 

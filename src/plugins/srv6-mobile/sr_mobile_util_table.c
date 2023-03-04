@@ -126,6 +126,8 @@ sr_table_node_new (struct sr_table *table, u_int8_t *key, u_int8_t keylen)
 
   node->key_len = keylen;
   node->info = NULL;
+  node->link[0] = NULL;
+  node->link[1] = NULL;
   memcpy (node->key, key, table->max_key_siz);
 
   node->table = table;
@@ -176,6 +178,8 @@ sr_table_node_base (struct sr_table *table, struct sr_table_node *node,
   new->table = table;
 
   new->key_len = len;
+  new->link[0] = NULL;
+  new->link[1] = NULL;
   for (j = 0; j < i; j++)
     {
       new->key[j] = node->key[j];
