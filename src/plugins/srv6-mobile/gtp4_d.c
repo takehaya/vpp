@@ -223,15 +223,6 @@ alloc_param_srv6_t_m_gtp4_d (void **plugin_mem_p, const void *v6src_prefix,
       p_mem->fib4_index = ip4_fib_index_from_table_id (fib_table);
       p_mem->fib6_index = ip6_fib_index_from_table_id (fib_table);
     }
-  
-  struct sr_table_node *n1=0;
-  printf("loookup start\n");
-  n1 = sr_table_node_match (ls_mem->tedb, (u8 *) &teid, 32);
-  printf("match do\n");
-  if (n1 != NULL)
-  {
-    printf("loookup succ\n");
-  }
   return 1;
 }
 
